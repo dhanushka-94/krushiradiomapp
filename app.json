@@ -1,28 +1,65 @@
 {
   "expo": {
-    "name": "krushi-radio",
+    "name": "Krushi Radio",
     "slug": "krushi-radio",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      },
+      "bundleIdentifier": "com.tfbs.kruthiradio25"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "FOREGROUND_SERVICE",
+        "POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.tfbs.kruthiradio25"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo.png"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Krushi Radio to access your microphone."
+        }
+      ]
+    ],
+    "primaryColor": "#30c054",
+    "androidStatusBar": {
+      "backgroundColor": "#ffffff",
+      "barStyle": "dark-content"
+    },
+    "extra": {
+      "slogan": "ගහකොල අතරේ හුස්ම හොයනා රෙඩියෝ යාත්‍රිකයා",
+      "tagline": "Official Agricultural Media Network in Sri Lanka",
+      "eas": {
+        "projectId": "0fbb6999-3c05-486d-b2b4-c2704965804f"
+      }
+    },
+    "notification": {
+      "icon": "./assets/logo.png",
+      "color": "#30c054"
     }
   }
 }
