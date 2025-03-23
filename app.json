@@ -2,8 +2,8 @@
   "expo": {
     "name": "Krushi Radio",
     "slug": "krushi-radio",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "version": "6.0.0",
+    "orientation": "default",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -19,7 +19,8 @@
           "audio"
         ]
       },
-      "bundleIdentifier": "com.tfbs.kruthiradio25"
+      "bundleIdentifier": "com.tfbs.kruthiradio25",
+      "buildNumber": "6.0.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,7 +33,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.tfbs.kruthiradio25"
+      "package": "com.tfbs.kruthiradio25",
+      "versionCode": 6
     },
     "web": {
       "favicon": "./assets/logo.png"

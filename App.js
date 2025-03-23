@@ -1,9 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Image, ScrollView, Linking, SafeAreaView, Modal, ImageBackground, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Image, ScrollView, Linking, SafeAreaView, Modal, ImageBackground, Animated, Dimensions, useWindowDimensions } from 'react-native';
 import { Audio } from 'expo-av';
 import { useState, useEffect, useRef } from 'react';
-import * as Network from 'expo-network';
-import { Ionicons, FontAwesome, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 
 // Keep the splash screen visible while we fetch resources
@@ -15,15 +14,16 @@ export default function App() {
   const [isBuffering, setIsBuffering] = useState(false);
   const [error, setError] = useState(null);
   const [volume, setVolume] = useState(1.0);
-  const [networkState, setNetworkState] = useState('unknown');
-  const [networkQuality, setNetworkQuality] = useState(null);
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [appIsReady, setAppIsReady] = useState(false);
   const [splashVisible, setSplashVisible] = useState(true);
+  const [orientation, setOrientation] = useState('portrait');
+  const [screenType, setScreenType] = useState('phone');
   const currentYear = new Date().getFullYear();
   const fadeAnim = useRef(new Animated.Value(0.3)).current;
+  const dimensions = useWindowDimensions();
   
   // Primary color
   const PRIMARY_COLOR = '#30c054';
@@ -41,39 +41,33 @@ export default function App() {
     linkedin: 'https://www.linkedin.com/company/73046085/admin/dashboard/',
     twitter: 'https://x.com/i/flow/login?redirect_after_login=%2FRadioKrush81648'
   };
-
-  // Initialize app and prepare resources
+  
+  // Detect screen orientation and device type
   useEffect(() => {
-    async function prepare() {
-      try {
-        // Pre-load any resources needed
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Show splash for at least 2 seconds
-        
-        // Set up audio mode for background playing immediately
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        // Tell the application to render
-        setAppIsReady(true);
-        // Hide splash screen after a short delay to ensure smooth transition
-        setTimeout(async () => {
-          await SplashScreen.hideAsync();
-          setSplashVisible(false);
-          // Start playing automatically after splash screen hides
-          playSound();
-        }, 500);
-      }
-    }
-
-    prepare();
-  }, []);
+    const detectOrientation = () => {
+      const { width, height } = dimensions;
+      const isPortrait = height > width;
+      setOrientation(isPortrait ? 'portrait' : 'landscape');
+      
+      // Detect if it's a tablet based on screen size and density
+      const pixelDensity = Dimensions.get('window').scale;
+      const widthInInches = width / (pixelDensity * 160);
+      const heightInInches = height / (pixelDensity * 160);
+      const diagonalInInches = Math.sqrt(Math.pow(widthInInches, 2) + Math.pow(heightInInches, 2));
+      
+      setScreenType(diagonalInInches >= 7 ? 'tablet' : 'phone');
+    };
+    
+    detectOrientation();
+    
+    // Listen for orientation changes
+    Dimensions.addEventListener('change', detectOrientation);
+    
+    return () => {
+      // Clean up
+      // Note: In newer React Native versions, this cleanup might be different
+    };
+  }, [dimensions]);
 
   // Custom splash screen
   const SplashScreenComponent = () => (
@@ -91,104 +85,73 @@ export default function App() {
     </View>
   );
 
-  // Auto-play when app starts
+  // Use effect to preload and setup the app
   useEffect(() => {
-    if (appIsReady && !splashVisible) {
-      playSound();
-    }
-  }, [appIsReady, splashVisible]);
-
-  // Check network status periodically
-  useEffect(() => {
-    const checkNetwork = async () => {
+    async function prepare() {
       try {
-        const networkState = await Network.getNetworkStateAsync();
-        setNetworkState(networkState.type);
+        // Load fonts, images, audio, etc. here
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate loading time
         
-        // Simulate network quality check (would be replaced with actual speed test in production)
-        if (networkState.isConnected) {
-          const qualityMap = {
-            'unknown': 'unknown',
-            'none': 'none',
-            'wifi': 'excellent',
-            'cellular': 'good',
-            'bluetooth': 'fair',
-            'ethernet': 'excellent',
-            'wimax': 'good',
-            'vpn': 'fair',
-            'other': 'unknown'
-          };
-          
-          setNetworkQuality(qualityMap[networkState.type] || 'unknown');
-          
-          // If we were previously disconnected and now connected, attempt reconnect
-          if (error && error.includes('network') && isPlaying) {
-            playSound();
-          }
-        } else {
-          setNetworkQuality('none');
-          if (isPlaying) {
-            setError('Network connection lost. Waiting to reconnect...');
-            if (sound) {
-              await sound.pauseAsync();
-            }
-          }
-        }
+        // Everything is ready, hide splash screen
+        await SplashScreen.hideAsync();
+        setAppIsReady(true);
+        
+        // After a delay, hide our custom splash and show the main app
+        setTimeout(() => {
+          setSplashVisible(false);
+        }, 2000);
+        
       } catch (e) {
-        console.error('Error checking network:', e);
-        setNetworkQuality('unknown');
+        console.warn(e);
       }
-    };
-    
-    // Check network immediately
-    checkNetwork();
-    
-    // Then check every 5 seconds
-    const interval = setInterval(checkNetwork, 5000);
-    
-    return () => clearInterval(interval);
-  }, [networkState, error, isPlaying]);
-  
-  // Auto-reconnect feature
-  useEffect(() => {
-    let reconnectTimer;
-    
-    if (error && error.includes('network') && networkQuality !== 'none') {
-      // Exponential backoff for reconnect attempts
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-      
-      reconnectTimer = setTimeout(async () => {
-        console.log(`Attempting to reconnect (attempt ${reconnectAttempts + 1})...`);
-        setReconnectAttempts(reconnectAttempts + 1);
-        await playSound();
-      }, delay);
-    } else if (!error) {
-      // Reset reconnect attempts when successfully connected
-      setReconnectAttempts(0);
     }
     
-    return () => {
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-    };
-  }, [error, networkQuality, reconnectAttempts]);
+    prepare();
+  }, []);
   
   useEffect(() => {
     // Unload the sound when component unmounts
     return sound ? () => sound.unloadAsync() : undefined;
   }, [sound]);
   
+  // Animate the "LIVE" text
+  useEffect(() => {
+    const fadeIn = () => {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }).start(() => fadeOut());
+    };
+    
+    const fadeOut = () => {
+      Animated.timing(fadeAnim, {
+        toValue: 0.3,
+        duration: 1000,
+        useNativeDriver: true,
+      }).start(() => fadeIn());
+    };
+    
+    fadeIn();
+    
+    return () => {
+      fadeAnim.stopAnimation();
+    };
+  }, []);
+
+  // Auto-play when app starts
+  useEffect(() => {
+    if (appIsReady && !splashVisible) {
+      playSound();
+    }
+  }, [appIsReady, splashVisible]);
+  
   async function playSound() {
     try {
       setIsBuffering(true);
       
-      // Only show network error when there's no connection
-      if (networkQuality === 'none') {
-        setError('Network connection unavailable. Please check your connection and try again.');
-        setIsBuffering(false);
-        return;
-      } else {
-        setError(null);
-      }
+      // Check if there is an error before trying to play
+      setError(null);
       
       // If sound is already loaded
       if (sound) {
@@ -225,7 +188,7 @@ export default function App() {
         error.message.includes('connection') ||
         error.message.includes('timeout')
       )) {
-        setError('Network error. Attempting to reconnect...');
+        setError('Network error. Please check your connection and try again.');
       } else {
         setError('Failed to load stream. Please try again.');
       }
@@ -278,45 +241,6 @@ export default function App() {
     Linking.openURL(url).catch(err => console.error('Failed to open link:', err));
   }
   
-  // Network quality indicator component
-  const NetworkIndicator = () => {
-    let color;
-    let label;
-    
-    switch(networkQuality) {
-      case 'excellent':
-        color = '#4CAF50';
-        label = 'Excellent';
-        break;
-      case 'good':
-        color = '#8BC34A';
-        label = 'Good';
-        break;
-      case 'fair':
-        color = '#FFC107';
-        label = 'Fair';
-        break;
-      case 'poor':
-        color = '#FF9800';
-        label = 'Poor';
-        break;
-      case 'none':
-        color = '#F44336';
-        label = 'No Connection';
-        break;
-      default:
-        color = '#9E9E9E';
-        label = 'Unknown';
-    }
-    
-    return (
-      <View style={styles.networkIndicator}>
-        <View style={[styles.networkDot, {backgroundColor: color}]} />
-        <Text style={styles.networkText}>{label}</Text>
-      </View>
-    );
-  };
-  
   // About modal
   const AboutModal = () => (
     <Modal
@@ -330,7 +254,7 @@ export default function App() {
           <Text style={styles.modalTitle}>About Us</Text>
           <ScrollView style={styles.modalScrollView}>
             <Text style={styles.modalText}>
-              රූපවාහිනිය වැනි ඉලෙක්ට්‍රොනික මාධ්‍ය සහ වෙනත් බොහෝ තොරතුරු තාක්‍ෂණය වේගයෙන් ජනතාව අතරට පැමිණියද ගුවන්විදුලිය තවමත් සංවේදී මාධ්‍යයක් ලෙස භාවිතයේ පවතී. එබැවින් කෘෂිකාර්මික සන්නිවේදන ක්‍රියාවලිය සඳහා ගුවන්විදුලිය කාර්යක්ෂමව භාවිතා කළ හැකිය.
+              රූපවාහිනිය වැනි ඉලෙක්ට්‍රොනික මාධ්‍ය සහ වෙනත් බොහෝ තොරතුරු තාක්‍ෂණය වේගයෙන් ජනතාව අතරට පැමිණියද ගුවන්විදුලිය තවමත් සංවේදී මාධ්‍යක් ලෙස භාවිතයේ පවතී. එබැවින් කෘෂිකාර්මික සන්නිවේදන ක්‍රියාවලිය සඳහා ගුවන්විදුලිය කාර්යක්ෂමව භාවිතා කළ හැකිය.
             </Text>
             <Text style={styles.modalText}>
               ගුවන් විදුලි ගොවි සේවාව කෘෂිකර්ම දෙපාර්තමේන්තුව වෙනුවෙන් ගුවන් විදුලි සන්නිවේදනය සමඟ විශාල කාර්යභාරයක් ඉටු කරයි. මෙම ආයතනය කෘෂිකර්ම දෙපාර්තමේන්තුවේ ජාතික කෘෂිකාර්මික තොරතුරු හා සන්නිවේදන මධ්‍යස්ථානය යටතේ ක්‍රියාත්මක වේ.
@@ -383,35 +307,135 @@ export default function App() {
     </Modal>
   );
   
-  // Animate the "LIVE" text
-  useEffect(() => {
-    const fadeIn = () => {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }).start(() => fadeOut());
-    };
-    
-    const fadeOut = () => {
-      Animated.timing(fadeAnim, {
-        toValue: 0.3,
-        duration: 1000,
-        useNativeDriver: true,
-      }).start(() => fadeIn());
-    };
-    
-    fadeIn();
-    
-    return () => {
-      fadeAnim.stopAnimation();
-    };
-  }, []);
+  // Privacy Policy modal
+  const PrivacyPolicyModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={privacyModalVisible}
+      onRequestClose={() => setPrivacyModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Privacy Policy</Text>
+          <ScrollView style={styles.modalScrollView}>
+            <Text style={styles.modalSubtitle}>
+              Privacy Policy for Krushi Radio Mobile App
+            </Text>
+            <Text style={styles.modalText}>
+              Effective Date: 01.03.2025
+            </Text>
+            
+            <Text style={styles.modalText}>
+              At Krushi Radio, powered by Television and Farm Broadcasting Service (TFBS), we are committed to protecting your privacy. This Privacy Policy explains our approach to privacy and clearly states that we do not collect, store, or process any personal information from users of the Krushi Radio mobile application.
+            </Text>
+            
+            <Text style={styles.modalSubtitle}>1. No Data Collection</Text>
+            <Text style={styles.modalText}>
+              We respect your privacy, and we want you to feel safe while using the Krushi Radio app. To this end, we have designed the app to ensure that:
+            </Text>
+            <Text style={styles.modalText}>
+              • No Personal Information is Collected: We do not collect your name, email address, phone number, or any other personal data.
+            </Text>
+            <Text style={styles.modalText}>
+              • No Tracking or Analytics: The app does not use any tracking tools, cookies, or analytics services.
+            </Text>
+            <Text style={styles.modalText}>
+              • No Location Data: We do not collect or access your location.
+            </Text>
+            <Text style={styles.modalText}>
+              • No Third-Party Data Collection: The app does not integrate with any third-party services that collect user data.
+            </Text>
+            
+            <Text style={styles.modalSubtitle}>2. Children's Privacy</Text>
+            <Text style={styles.modalText}>
+              Since we do not collect any user information, the app is safe for users of all ages, including children. However, we recommend that parents and guardians supervise app usage for children under 13.
+            </Text>
+            
+            <Text style={styles.modalSubtitle}>3. Data Security</Text>
+            <Text style={styles.modalText}>
+              Although we do not collect user information, we still prioritize app security to ensure a safe and seamless listening experience for all users.
+            </Text>
+            
+            <Text style={styles.modalSubtitle}>4. Changes to This Privacy Policy</Text>
+            <Text style={styles.modalText}>
+              This Privacy Policy may be updated from time to time. Any changes will be reflected within the app. By continuing to use the app after such changes, you accept the updated Privacy Policy.
+            </Text>
+            
+            <Text style={styles.modalSubtitle}>5. Contact Us</Text>
+            <Text style={styles.modalText}>
+              If you have any questions or concerns about this Privacy Policy, please contact us at:
+            </Text>
+            <Text style={styles.modalText}>
+              Television & Farm Broadcasting Service{"\n"}
+              National Agriculture Information and Communication Center,{"\n"}
+              Peradeniya.{"\n"}
+              Telephone: +94 81 238 8388{"\n"}
+              Email: info@krushiradio.lk
+            </Text>
+          </ScrollView>
+          <TouchableOpacity 
+            style={[styles.modalButton, {backgroundColor: PRIMARY_COLOR}]}
+            onPress={() => setPrivacyModalVisible(false)}
+          >
+            <Text style={styles.modalButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
   
   // Return splash screen if app is not ready
   if (!appIsReady) {
     return <SplashScreenComponent />;
   }
+  
+  // Return custom splash screen if visible
+  if (splashVisible) {
+    return <SplashScreenComponent />;
+  }
+
+  // Dynamic styles based on orientation and screen size
+  const dynamicStyles = {
+    playerCard: {
+      margin: screenType === 'tablet' ? 25 : 15,
+      maxWidth: orientation === 'landscape' && screenType === 'tablet' ? '60%' : '100%',
+      alignSelf: 'center',
+    },
+    logo: {
+      width: screenType === 'tablet' ? 200 : 150,
+      height: screenType === 'tablet' ? 90 : 70,
+    },
+    playButton: {
+      width: screenType === 'tablet' ? 100 : 80,
+      height: screenType === 'tablet' ? 100 : 80,
+      borderRadius: screenType === 'tablet' ? 50 : 40,
+    },
+    container: {
+      flexDirection: orientation === 'landscape' && screenType === 'tablet' ? 'row' : 'column',
+    },
+    mainContent: {
+      flex: 1,
+    },
+    socialContainer: {
+      flexDirection: orientation === 'landscape' ? 'row' : 'column',
+      justifyContent: 'space-around',
+      flexWrap: 'wrap',
+    },
+    socialButtonSize: {
+      width: screenType === 'tablet' 
+        ? orientation === 'landscape' ? '23%' : '48%' 
+        : orientation === 'landscape' ? '23%' : '48%',
+      marginBottom: 10,
+      marginHorizontal: screenType === 'tablet' ? 4 : 2,
+    },
+    socialIconSize: screenType === 'tablet' ? 32 : 22,
+    socialTextSize: screenType === 'tablet' ? 16 : 14,
+    linksCard: {
+      margin: screenType === 'tablet' ? 25 : 15,
+      width: orientation === 'landscape' && screenType === 'tablet' ? '40%' : undefined,
+    }
+  };
 
   return (
     <ImageBackground 
@@ -419,13 +443,13 @@ export default function App() {
       style={styles.backgroundPattern}
       resizeMode="repeat"
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, dynamicStyles.container]}>
         <StatusBar style="dark" />
         
         <View style={styles.header}>
           <Image 
             source={require('./assets/logo.png')} 
-            style={styles.logo}
+            style={[styles.logo, dynamicStyles.logo]}
             resizeMode="contain"
           />
         </View>
@@ -436,14 +460,14 @@ export default function App() {
             <Text style={styles.tagline}>Official Agricultural Media Network in Sri Lanka</Text>
           </View>
           
-          <View style={styles.playerCard}>
+          <View style={[styles.playerCard, dynamicStyles.playerCard]}>
             <View style={styles.playerContainer}>
               {error ? (
                 <Text style={styles.errorText}>{error}</Text>
               ) : null}
               
               <TouchableOpacity 
-                style={styles.playButton} 
+                style={[styles.playButton, dynamicStyles.playButton]} 
                 onPress={togglePlayPause}
                 disabled={isBuffering}
               >
@@ -490,7 +514,7 @@ export default function App() {
             </View>
           </View>
           
-          <View style={styles.linksCard}>
+          <View style={[styles.linksCard, dynamicStyles.linksCard]}>
             <Text style={styles.linksTitle}>Web Resources</Text>
             
             <TouchableOpacity 
@@ -518,37 +542,45 @@ export default function App() {
           <View style={styles.socialCard}>
             <Text style={styles.socialTitle}>Follow Us</Text>
             
-            <View style={styles.socialButtons}>
+            <View style={[styles.socialButtonsContainer]}>
               <TouchableOpacity 
-                style={styles.socialButton} 
+                style={[styles.socialButton, dynamicStyles.socialButtonSize]} 
                 onPress={() => openLink(webLinks.facebook)}
               >
-                <FontAwesome name="facebook" size={24} color={PRIMARY_COLOR} />
-                <Text style={styles.socialButtonText}>Facebook</Text>
+                <View style={styles.socialButtonInner}>
+                  <FontAwesome name="facebook" size={dynamicStyles.socialIconSize} color={PRIMARY_COLOR} />
+                  <Text style={[styles.socialButtonText, {fontSize: dynamicStyles.socialTextSize}]}>Facebook</Text>
+                </View>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.socialButton} 
+                style={[styles.socialButton, dynamicStyles.socialButtonSize]} 
                 onPress={() => openLink(webLinks.youtube)}
               >
-                <FontAwesome name="youtube-play" size={24} color="#FF0000" />
-                <Text style={styles.socialButtonText}>YouTube</Text>
+                <View style={styles.socialButtonInner}>
+                  <FontAwesome name="youtube-play" size={dynamicStyles.socialIconSize} color="#FF0000" />
+                  <Text style={[styles.socialButtonText, {fontSize: dynamicStyles.socialTextSize}]}>YouTube</Text>
+                </View>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.socialButton} 
+                style={[styles.socialButton, dynamicStyles.socialButtonSize]} 
                 onPress={() => openLink(webLinks.linkedin)}
               >
-                <FontAwesome name="linkedin-square" size={24} color="#0077B5" />
-                <Text style={styles.socialButtonText}>LinkedIn</Text>
+                <View style={styles.socialButtonInner}>
+                  <FontAwesome name="linkedin-square" size={dynamicStyles.socialIconSize} color="#0077B5" />
+                  <Text style={[styles.socialButtonText, {fontSize: dynamicStyles.socialTextSize}]}>LinkedIn</Text>
+                </View>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.socialButton} 
+                style={[styles.socialButton, dynamicStyles.socialButtonSize]} 
                 onPress={() => openLink(webLinks.twitter)}
               >
-                <MaterialCommunityIcons name="twitter" size={24} color="#1DA1F2" />
-                <Text style={styles.socialButtonText}>X</Text>
+                <View style={styles.socialButtonInner}>
+                  <MaterialCommunityIcons name="twitter" size={dynamicStyles.socialIconSize} color="#1DA1F2" />
+                  <Text style={[styles.socialButtonText, {fontSize: dynamicStyles.socialTextSize}]}>X</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -569,8 +601,16 @@ export default function App() {
             </TouchableOpacity>
           </View>
           
+          <View style={styles.privacyContainer}>
+            <TouchableOpacity 
+              style={styles.privacyButton} 
+              onPress={() => setPrivacyModalVisible(true)}
+            >
+              <Text style={styles.privacyButtonText}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
+          
           <View style={styles.footer}>
-            <NetworkIndicator />
             <Text style={styles.footerText}>
               Copyright © {currentYear} Krushi Radio. Powered by Television and Farmers Broadcasting Service. Department of Agriculture. Sri Lanka. All rights reserved.
             </Text>
@@ -579,6 +619,7 @@ export default function App() {
         
         <AboutModal />
         <ContactModal />
+        <PrivacyPolicyModal />
       </SafeAreaView>
     </ImageBackground>
   );
@@ -609,28 +650,6 @@ const styles = StyleSheet.create({
     width: 150,
     height: 70,
     alignSelf: 'center',
-  },
-  networkIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginBottom: 10,
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  networkDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 5,
-  },
-  networkText: {
-    fontSize: 12,
-    color: '#666',
   },
   scrollView: {
     flex: 1,
@@ -851,28 +870,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 10,
+    marginBottom: 15,
     textAlign: 'center',
   },
-  socialButtons: {
+  socialButtonsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   socialButton: {
     backgroundColor: '#f1f8e9',
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
-    marginVertical: 5,
     alignItems: 'center',
-    width: '48%',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  socialButtonInner: {
     flexDirection: 'row',
-    justifyContent: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   socialButtonText: {
     color: '#2e7d32',
     fontWeight: '500',
-    marginLeft: 8
+    marginLeft: 8,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1003,5 +1033,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#B0B0B0',
     marginTop: 100,
+  },
+  privacyContainer: {
+    margin: 15,
+    alignItems: 'center',
+  },
+  privacyButton: {
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  privacyButtonText: {
+    color: '#666',
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });

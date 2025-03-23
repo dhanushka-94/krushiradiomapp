@@ -15,10 +15,17 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "path-to-your-key.json",
+        "track": "production"
+      }
+    }
   }
 }
