@@ -403,8 +403,8 @@ export default function App() {
       alignSelf: 'center',
     },
     logo: {
-      width: screenType === 'tablet' ? 200 : 150,
-      height: screenType === 'tablet' ? 90 : 70,
+      width: screenType === 'tablet' ? 250 : 200,
+      height: screenType === 'tablet' ? 120 : 100,
     },
     playButton: {
       width: screenType === 'tablet' ? 100 : 80,
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   logo: {
-    width: 150,
+    width: 200,
     height: 70,
     alignSelf: 'center',
   },
@@ -1005,8 +1005,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   splashLogo: {
-    width: 200,
-    height: 100,
+    width: 300,
+    height: 150,
     marginBottom: 40,
   },
   splashTextContainer: {
